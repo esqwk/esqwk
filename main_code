@@ -1,0 +1,719 @@
+import pygame
+
+
+do = False
+menu = True
+rest = False
+alive = True
+win = False
+death_timer = 0
+lvl = 0
+is_Dark = False
+dark = 0
+no_collision_timer = 0
+parabola = lambda x: -17 * x ** 2 / 240 + 8.5 * x
+
+
+class Player:
+    def __init__(self):
+        self.player_hp = 2
+        self.player_x = 515
+        self.player_y = 435
+        self.player_height = 65
+        self.player_width = 65
+        self.v_x = 0
+        self.v_y = 0
+        self.jump_h = -25
+        self.a = 2.5
+        self.counter_korovan = 0
+        self.counter_druzd = 0
+        self.in_fly = True
+        self.side = True
+
+    # Расчет иксов и игреков иксов игрока для коллизии
+    @property
+    def x1x2(self) -> tuple:
+        x1 = self.player_x
+        x2 = self.player_x + self.player_width
+        return x1, x2
+
+    @property
+    def y1y2(self) -> tuple:
+        y1 = self.player_y
+        y2 = self.player_y + self.player_height
+        return y1, y2
+
+    @property
+    def all_player_cords(self) -> tuple:
+        x1 = self.player_x
+        y1 = self.player_y
+
+        x2 = (self.player_x + self.player_width)
+        y2 = self.player_y
+
+        x3 = self.player_x + self.player_width
+        y3 = self.player_y + self.player_height
+
+        x4 = self.player_x
+        y4 = self.player_y + self.player_height
+        return (x1, y1), (x2, y2), (x3, y3), (x4, y4)
+
+    def move_x(self):
+        global keys
+        if keys[pygame.K_LEFT] and not death_timer:
+            if self.player_hp > -1:
+                davic.side = True
+                self.v_x = -10
+                return
+        else:
+            self.v_x = 0
+        if keys[pygame.K_RIGHT] and not death_timer:
+            if self.player_hp > -1:
+                davic.side = False
+                self.v_x = 10
+        else:
+            self.v_x = 0
+
+    def jump(self):
+        global keys
+        if keys[pygame.K_UP] and not self.in_fly and not death_timer:
+            if self.player_hp > -1:
+                self.player_y -= 1
+                self.v_y = self.jump_h
+                self.in_fly = True
+
+    def back_to_spawn(self):
+        if lvl == 0:
+            self.player_x = 515
+            self.player_y = 435
+        elif lvl > 0 and alive:
+            self.player_x = mass_class_levels[lvl].class_door.door_x + 10
+            self.player_y = mass_class_levels[lvl].class_door.door_y + mass_class_levels[lvl].class_door.door_height - self.player_height - 10
+
+    def draw_hearts(self):
+        global heart_mass
+        screen.blit(heart_mass[self.player_hp], (900, 10))
+
+
+class Level:
+    def __init__(self, mass_platforms_cords, mass_gruzd_cords, mass_druzd_cords, mass_colors, door_cord, korovan_cord, level):
+        self.mass_platforms_cords = mass_platforms_cords
+        self.mass_gruzd_cords = mass_gruzd_cords
+        self.mass_druzd_cords = mass_druzd_cords
+        self.mass_colors = mass_colors
+        self.door_cord = door_cord
+        self.mass_korovan_cord = korovan_cord
+
+        self.mass_class_platforms = [Platform(self.mass_platforms_cords[i], self.mass_colors[i], 75, 10, level) for i in range(len(self.mass_platforms_cords))]
+        self.mass_class_platforms.append(Platform((30, 250), (112, 112, 214), 75, 10, 0))
+        self.mass_class_platforms.append(Platform((30, 250), (44, 176, 182), 75, 10, 1))
+        self.mass_class_platforms.append(Platform((0, 500), 'black', 1000, 1, -1))
+        self.mass_class_platforms.append(Platform((-85, 0), 'black', 85, 500, -1))
+        self.mass_class_platforms.append(Platform((1000, 0), 'black', 10, 500, -1))
+
+        self.mass_class_gruzd = [Gruzd(self.mass_gruzd_cords[i]) for i in range(len(self.mass_gruzd_cords))]
+
+        self.class_druzd = Druzd(mass_druzd_cords)
+
+        self.class_korovan = Korovan(korovan_cord)
+
+        self.class_door = Door(door_cord)
+
+    def draw_platforms(self):
+        for i in self.mass_class_platforms:
+            i.lvl_build()
+
+    def draw_gruzds(self):
+        for i in self.mass_class_gruzd:
+            i.draw_gruzd()
+
+    def draw_doors(self):
+        self.class_door.draw_and_check_door()
+
+    def draw_korovan(self):
+        self.class_korovan.korovan_draw_and_collision()
+
+    def draw_druzd(self):
+        self.class_druzd.druzd_draw_and_collision()
+
+
+class Platform:
+    def __init__(self, cords, background_color, width, height, level_plat):
+        self.block_x = cords[0]
+        self.block_y = cords[1]
+        self.block_width = width
+        self.block_height = height
+        self.block_color = background_color
+        self.platform_image = platform_image
+        self.level = level_plat
+
+    # Рисуем каждый элемент массива классов платформ учитывая его задний фон
+    def lvl_build(self):
+        global platform_image
+        if backC == self.block_color and (self.level == -1 or self.level == lvl):
+            screen.blit(platform_image, (self.block_x, self.block_y))
+        elif backC != self.block_color and self.level == lvl:
+            screen.blit(conture, (self.block_x, self.block_y))
+
+
+class Gruzd:
+    def __init__(self, cords):
+        self.gruzd_x = cords[0]
+        self.gruzd_y = cords[1]
+        self.gruzd_width = 122
+        self.gruzd_height = 66
+
+    def draw_gruzd(self):
+        screen.blit(gruzd, (self.gruzd_x, self.gruzd_y))
+
+    def check_collision_gruzd(self):
+        x1 = self.gruzd_x
+        y1 = self.gruzd_y
+        x2 = self.gruzd_x + self.gruzd_width
+        y2 = self.gruzd_y + self.gruzd_height
+        for x3, y3 in davic.all_player_cords:
+            if x1 <= x3 <= x2 and y1 <= y3 <= y2:
+                return True
+        return False
+
+
+class Druzd:
+    def __init__(self, cords):
+        self.druzd_x = cords[0]
+        self.druzd_y = cords[1]
+        self.druzd_width = 62
+        self.druzd_height = 33
+        self.druzd_exist = True
+
+    def check_collision_druzd(self):
+        x1 = self.druzd_x
+        y1 = self.druzd_y  # 62 x 33
+        x2 = self.druzd_x + self.druzd_width
+        y2 = self.druzd_y + self.druzd_height
+        for x3, y3 in davic.all_player_cords:
+            if x1 <= x3 <= x2 and y1 <= y3 <= y2 and self.druzd_exist:
+                davic.counter_druzd += 1
+                return True
+        return False
+
+    def druzd_draw_and_collision(self):
+        if self.druzd_exist:
+            screen.blit(druzd, (self.druzd_x, self.druzd_y))
+        if self.check_collision_druzd():
+            self.druzd_exist = False
+
+
+class Button:
+    def __init__(self, x, y, image, function):
+        self.button_x = x
+        self.button_y = y
+        self.image = image
+        self.function = function   # Передаем функцию которую кнопка будет выполнять
+
+    def click(self):
+        for i in events:
+            x1, y1 = pygame.mouse.get_pos()
+            if 50**2 >= (x1 - self.button_x - 50)**2 + (y1 - self.button_y - 50)**2:
+                if i.type == pygame.MOUSEBUTTONDOWN and i.button == 1:
+                    self.function()
+
+    def draw_button(self):
+        screen.blit(self.image, (self.button_x, self.button_y))
+
+
+class Door:
+    def __init__(self, cords):
+        self.door_x = cords[0]
+        self.door_y = cords[1]
+        self.door_width = 100
+        self.door_height = 200
+
+    def check_collision_door(self):
+        x1 = self.door_x
+        y1 = self.door_y
+        x2 = self.door_x + self.door_width
+        y2 = self.door_y + self.door_height
+        for x3, y3 in davic.all_player_cords:
+            if x1 <= x3 <= x2 and y1 <= y3 <= y2:
+                return True
+        return False
+
+    def draw_and_check_door(self):
+        if self.check_collision_door():
+            screen.blit(door_opened, (self.door_x, self.door_y))
+        else:
+            screen.blit(door_closed, (self.door_x, self.door_y))
+
+
+class Korovan:
+    def __init__(self, cords):
+        self.korovan_x = cords[0]
+        self.korovan_y = cords[1]
+        self.korovan_exist = True
+
+    def check_collision_korovan(self):
+        x1 = self.korovan_x
+        y1 = self.korovan_y  # 75 x 65
+        x2 = self.korovan_x + 65
+        y2 = self.korovan_y + 75
+        for x3, y3 in davic.all_player_cords:
+            if x1 <= x3 <= x2 and y1 <= y3 <= y2 and self.korovan_exist:
+                davic.counter_korovan += 1
+                return True
+        return False
+
+    def korovan_draw_and_collision(self):
+        if self.korovan_exist and davic.player_hp != -1:
+            screen.blit(korovan, (self.korovan_x, self.korovan_y))
+        if self.check_collision_korovan():
+            self.korovan_exist = False
+
+
+class Inventory:
+    def __init__(self, mas_invent):
+        self.inv_x = 650
+        self.inv_y = 5
+        self.count_druzd = 0
+        self.count_korovan = 0
+        self.mas_inv = mas_invent
+
+    def check_new_druzd(self):
+        self.count_druzd = davic.counter_druzd
+
+    def check_new_korovan(self):
+        self.count_korovan = davic.counter_korovan
+
+    def draw_inv_heal(self):
+        if davic.counter_druzd > 0:
+            screen.blit(inv_druzd, (self.inv_x + 15, self.inv_y + 20))
+            draw_counter(self.inv_x + 50, self.inv_y + 45, self.count_druzd)
+
+    def draw_korovan_inv(self):
+        if davic.counter_korovan > 0:
+            screen.blit(korovan_inv, (self.inv_x + 95, self.inv_y + 15))
+            draw_counter(self.inv_x + 145, self.inv_y + 45, self.count_korovan)
+
+    def draw_inventory(self):
+        for i in range(3):
+            screen.blit(mas_inv[i], (self.inv_x + i * 82, self.inv_y))
+
+
+def function_restart():
+    global do
+    global lvl
+    global index
+    global backC
+    global alive
+    global win
+    lvl = 0
+    davic.player_x = 515
+    davic.player_y = 435
+    do = False
+    win = False
+    davic.player_hp = 2
+    davic.side = True
+    davic.in_fly = False
+    davic.counter_druzd = 0
+    davic.back_to_spawn()
+    index = 0
+    backC = colors[lvl][index]
+    alive = True
+    davic.counter_korovan = 0
+    for i in range(3):
+        mass_class_levels[i].class_korovan.korovan_exist = True
+        mass_class_levels[i].class_druzd.druzd_exist = True
+
+
+def win_check():
+    if win:
+        screen.blit(win_screen, (0, 0))
+        screen.blit(button_restart, (900, 400))
+        for i in mas_buttons:
+            if i.click():
+                function_restart()
+
+
+def die():
+    global alive
+    global rest
+    screen.blit(game_over, (0, 0))
+    screen.blit(button_restart, (900, 400))
+    alive = False
+    for i in mas_buttons:
+        if i.click():
+            function_restart()
+            rest = True
+
+
+def color():
+    global running
+    global backC
+    global index
+    global events
+    global event
+    for event in events:
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_1:
+                index = (index + 1) % len(colors[lvl])
+                backC = colors[lvl][index]
+            if event.key == pygame.K_2:
+                index = (index - 1) % len(colors[lvl])
+                backC = colors[lvl][index]
+
+
+def draw_counter(x, y, i):
+    number = font1.render(str(i), True, (0, 0, 0))
+    screen.blit(number, (x, y))
+
+
+def function_start():
+    global menu
+    menu = False
+
+
+def obscure():
+    global dark
+    global is_Dark
+    global lvl
+    global index
+    global backC
+    if is_Dark:
+        obscuration.set_alpha(parabola(dark))
+        screen.blit(obscuration, (0, 0))
+        if dark == 60:
+            lvl += 1
+            index = 0
+            backC = colors[lvl][index]
+        if dark == 0:
+            is_Dark = False
+        else:
+            dark -= 1
+
+
+def cage_start():
+    global do
+    if keys[pygame.K_UP] or keys[pygame.K_DOWN] or keys[pygame.K_LEFT] or keys[pygame.K_RIGHT]:
+        do = True
+    if lvl == 0:
+        if do or rest:
+            screen.blit(cage_corrupted, (500, 415))
+        else:
+            screen.blit(cage_intact, (500, 415))
+
+
+def get_damage():
+    global death_timer
+    for i in mass_class_levels[lvl].mass_class_gruzd:
+        if i.check_collision_gruzd():
+            death_timer = 30
+            if davic.player_hp > -1:
+                davic.player_hp -= 1
+                if davic.counter_korovan > lvl:
+                    davic.counter_korovan -= 1
+                    mass_class_levels[lvl].class_korovan.korovan_exist = True
+            if davic.player_hp > -1:
+                davic.back_to_spawn()
+            return
+    if davic.player_y > 500:
+        death_timer = 30
+        if davic.player_hp > -1:
+            davic.player_hp -= 1
+            if davic.counter_korovan > lvl:
+                davic.counter_korovan -= 1
+                mass_class_levels[lvl].class_korovan.korovan_exist = True
+        if davic.player_hp > -1:
+            davic.back_to_spawn()
+            return
+
+
+def check_collision1(x1, x2, x3, x4):  # проверка на коллизию по иксу
+    if x1 <= x3 <= x4 <= x2:
+        return True
+    if x3 <= x1 <= x2 <= x4:
+        return True
+    if x3 <= x1 <= x4 <= x2:
+        return True
+    if x1 <= x3 <= x2 <= x4:
+        return True
+    else:
+        return False
+
+
+def check_collision_y(y, y1, y_block):  # проверка на коллизию по игреку
+    if y == y_block:
+        return True
+    if y1 >= y_block > y:
+        return True
+    return False
+
+
+def check_collision_no_enter1(y, y1, y_block):  # проверка на то, что бы в блок не заходил справа и не только
+    if y1 <= y_block <= y:
+        return True
+    return False
+
+
+def check_collision_no_enter2(y, y1, y_block):  # проверка на то, что бы в блок не заходил слева и не только
+    if y1 >= y_block >= y:
+        return True
+    return False
+
+
+def check_collision_under(y, y1, y_block):  # проверка на коллизию по игреку
+    if y1 <= y_block < y:
+        return True
+    return False
+
+
+def step():                                  # ходьба и притяжение зависящее от коллизии
+    x1 = davic.x1x2[0]
+    x2 = davic.x1x2[1]
+    davic.move_x()
+    davic.v_y += davic.a
+    y_future = davic.player_y + davic.v_y
+    x_future = davic.player_x + davic.v_x
+    y1 = davic.y1y2[0]
+    y2 = davic.y1y2[1]
+    got_collision = False
+    if no_collision_timer == 0:         # КОЛЛИЗИЯ ПО ВЕРТИКАЛИ
+        for i in mass_class_levels[lvl].mass_class_platforms:
+            x3 = i.block_x
+            x4 = x3 + i.block_width
+            if backC == i.block_color or i.block_color == 'black':
+                if check_collision1(x1, x2, x3, x4):
+                    if check_collision_y(davic.player_y + davic.player_height, y_future + davic.player_height, i.block_y):
+                        y_future = i.block_y - davic.player_height
+                        davic.v_y = 0
+                        davic.in_fly = False
+                        got_collision = True
+                    if check_collision_under(davic.player_y, y_future, i.block_y + i.block_height):
+                        davic.v_y = 0
+                        y_future = i.block_y + i.block_height
+                        got_collision = True
+        # проверка на got_collision
+        if not got_collision:
+            davic.in_fly = True
+        for i in mass_class_levels[lvl].mass_class_platforms:  # i - каждый класс платформы
+            if backC == i.block_color or i.block_color == 'black':       # КОЛЛИЗИЯ ПО ГОРИЗОНТАЛИ
+                y3 = i.block_y
+                y4 = i.block_y + i.block_height
+                if check_collision1(y1, y2, y3, y4):
+                    if check_collision_no_enter1(davic.player_x, x_future, i.block_x + i.block_width):
+                        x_future = i.block_x + i.block_width
+                        break
+                    if check_collision_no_enter2(davic.player_x + davic.player_width, x_future + davic.player_width,
+                                                 i.block_x):
+                        x_future = i.block_x - davic.player_width
+                        break
+    davic.player_y = y_future
+    davic.player_x = x_future
+
+
+# НАЧАЛО НАЧАЛ
+pygame.init()
+davic = Player()
+
+# ЭКРАН
+screen = pygame.display.set_mode((1000, 500))
+pygame.display.set_caption("My pygame Project")
+pygame.display.set_icon(pygame.image.load('images/icon game.png'))
+
+# НОВЫЙ ЭКРАН ДЛЯ ЗАТЕМНЕНИЯ
+obscuration = pygame.Surface((1000, 500))
+obscuration.fill((0, 0, 0))
+
+# ШРИФТ
+font1 = pygame.font.SysFont('1', 36)
+
+# МУЗЫКА
+pygame.mixer.music.load('Music/music.ogg')
+pygame.mixer.music.play(-1)
+pygame.mixer.music.set_volume(0.01)
+
+# СЦЕНЫ НАЧАЛА И КОНЦА
+game_over = pygame.image.load('images/GAME OVER.png')
+game_start = pygame.image.load('images/start_menu.png')
+win_screen = pygame.image.load('images/win_screen.png')
+
+# КНОПКА
+button_restart = pygame.image.load('images/restart.png')
+button_start = pygame.image.load('images/start.png')
+mas_buttons = [Button(450, 400, button_start, function_start), Button(900, 400, button_restart, function_restart)]
+
+# ИВЕНТАРЬ
+inventory_cell = pygame.image.load('images/inventory_cell.png')
+inventory_cell = pygame.transform.scale(inventory_cell, (82, 82))
+inv1 = pygame.image.load('images/inv.png')
+mas_inv = [inventory_cell for i in range(3)]
+inv = Inventory(mas_inv)
+
+# ИГРОК И СКИНЫ
+player_right = pygame.image.load('images/player_cube_right.png')
+player_left = pygame.image.load('images/player_cube_left.png')
+player_left = pygame.transform.scale(player_left, (65, 65))
+player_right = pygame.transform.scale(player_right, (65, 65))
+
+skin1_right = pygame.image.load('images/skin1_right.png')
+skin1_left = pygame.image.load('images/skin1_left.png')
+
+# Создание массива цветов заднего фона.
+# Что бы добавить новый блок - вписать координаты платформы и ее цвет
+backC = (112, 112, 214)
+
+colors = [[(112, 112, 214), (141, 67, 183), (222, 131, 52), (225, 72, 91)],
+          [(44, 176, 182), (28, 156, 85), (166, 27, 175), (34, 47, 167)],
+          [(0, 255, 0), (255, 255, 0), (255, 0, 0), (0, 0, 255), (100, 9, 100)]]
+index = 0
+
+# СЕРДЦА
+heart1 = pygame.image.load('images/heart_alive.png')
+heart2 = pygame.image.load('images/heart_bitten.png')
+heart3 = pygame.image.load('images/heart_bitten_twice.png')
+heart4 = pygame.image.load('images/heart_bitten_triple.png')
+heart_mass = [heart3, heart2, heart1, heart4]
+
+# КОРОВАН
+korovan = pygame.image.load('images/korovan.png')
+korovan_inv = pygame.transform.scale(korovan, (55, 45))
+korovan_cords = [(30, 185),
+                 (100, 105),
+                 (100, 105)]
+
+# ШИП НУ ИЛИ ЖЕ ГРУЗЬДЬ
+# Что бы добавить еще один груздья просто вписать еще корды в mas_gruzd_cords
+gruzd = pygame.image.load('images/gruzd.png')
+gruzd = pygame.transform.scale(gruzd, (124, 66))
+druzd = pygame.image.load('images/druzd.png')
+inv_druzd = pygame.transform.scale(druzd, (50, 33))
+druzd_cords = [(300, 185),
+               (-100, 10),
+               (400, 205)]
+
+mas_gruzd_cords = [[(0, 434), (122, 434), (244, 434)],
+                   [(0, 434), (122, 434), (244, 434)],
+                   [(0, 434), (122, 434), (244, 434), (366, 434), (488, 434), (610, 434)]]
+
+# Создание массива из классов платформ
+platform_image = pygame.image.load('images/platform.png')
+conture = pygame.image.load('images/conture.png')
+platforms_cords = [[(800, 400), (560, 300), (360, 300), (160, 200)],
+                   [(700, 400), (800, 300), (560, 200), (260, 200)],
+                   [(700, 400), (600, 300), (500, 200), (260, 200), (30, 300)]]
+
+# Cоздание дверей
+door_closed = pygame.image.load('images/door_closed.png')
+door_opened = pygame.image.load('images/dor_opened.png')
+door_cords = [(900, 310),
+              (900, 310),
+              (900, 310)]
+
+# Массив классов уровней
+mass_class_levels = [Level(platforms_cords[i], mas_gruzd_cords[i], druzd_cords[i], colors[i], door_cords[i], korovan_cords[i], i) for i in range(3)]
+
+# СПАВН КЛЕТКА
+cage_intact = pygame.image.load('images/cage_intact.png')
+cage_corrupted = pygame.image.load('images/cage_corrupted.png')
+
+# Общие настройки цикла
+clock = pygame.time.Clock()
+running = True
+
+while running:
+    clock.tick(60)
+    screen.fill(backC)
+    keys = pygame.key.get_pressed()
+    events = pygame.event.get()
+    # Заставка игры
+    if menu:
+        screen.blit(game_start, (0, 0))
+        mas_buttons[0].draw_button()
+        mas_buttons[0].click()
+    else:
+        # Отрисовка хп
+        davic.draw_hearts()
+
+        # Коллизия каравана
+        mass_class_levels[lvl].draw_korovan()
+
+        # Инвентарь
+        inv.draw_inventory()
+
+        inv.check_new_druzd()
+
+        inv.check_new_korovan()
+
+        inv.draw_inv_heal()
+
+        inv.draw_korovan_inv()
+
+        # Коллизия двери
+        mass_class_levels[lvl].draw_doors()
+
+        # Что бы кубик смотрел в нужную сторону
+        if davic.side:
+            screen.blit(player_left, (davic.player_x, davic.player_y))
+        if not davic.side:
+            screen.blit(player_right, (davic.player_x, davic.player_y))
+
+        # Старт в клетке
+        cage_start()
+
+        # Возможность падения сквозь блок
+        if not davic.in_fly and keys[pygame.K_DOWN]:
+            no_collision_timer = 2
+        if no_collision_timer > 0:
+            no_collision_timer -= 1
+
+        if death_timer > 0:
+            death_timer -= 1
+
+        # Отрисовка платформ
+        mass_class_levels[lvl].draw_platforms()
+
+        # Отрисовка груздей
+        mass_class_levels[lvl].draw_gruzds()
+
+        # Отрисовка друзей
+        mass_class_levels[lvl].draw_druzd()
+
+        # Получение урона от груздей
+        get_damage()
+
+        # Движение игрока
+        davic.move_x()
+
+        # Прыжок
+        davic.jump()
+
+        # Ходьба с коллизией
+        if davic.player_hp > -1 and death_timer == 0:
+            step()
+            # Смена цвета
+            color()
+
+        # Экран смерти
+        if davic.player_hp <= -1:
+            die()
+
+    # Выход из игры
+    for event in events:
+        if event.type == pygame.QUIT:
+            running = False
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_x and davic.counter_korovan > lvl and mass_class_levels[lvl].class_door.check_collision_door() and lvl + 1 < len(mass_class_levels):
+                dark = 120
+                death_timer = 120
+                is_Dark = True
+            elif event.key == pygame.K_x and davic.counter_korovan > lvl and mass_class_levels[lvl].class_door.check_collision_door() and lvl + 1 == len(mass_class_levels):
+                win = True
+            elif event.key == pygame.K_3 and inv.count_druzd > 0 and davic.player_hp < 2:
+                davic.player_hp += 1
+                davic.counter_druzd -= 1
+    # Проверка на победу
+    win_check()
+
+    # Затемнение для смены уровня
+    obscure()
+
+    pygame.display.flip()
+pygame.quit()
